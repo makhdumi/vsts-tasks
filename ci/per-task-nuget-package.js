@@ -51,10 +51,10 @@ if (process.env.DISTRIBUTEDTASK_USE_PERTASK_NUGET || localRun) {
     var layoutPath = util.perTaskLayoutPath;
     var publishPath = util.perTaskPublishPath;
 
-    console.log('> printing folder structure before starting');
-    listFilesInDirectory(util.packagePath).forEach(function (f) { 
-        console.log(f);
-    });
+    // console.log('> printing folder structure before starting');
+    // listFilesInDirectory(util.packagePath).forEach(function (f) { 
+    //     console.log(f);
+    // });
 
     console.log(`> Creating folders for layout '${layoutPath}' and publish '${publishPath}'`);
     fs.mkdirSync(layoutPath);
@@ -68,9 +68,9 @@ if (process.env.DISTRIBUTEDTASK_USE_PERTASK_NUGET || localRun) {
     var taskDestMap = {}; // I don't think this is actually used for anything?
     util.linkAggregateLayoutContent(util.milestoneLayoutPath, layoutPath, '', commitHash, taskDestMap);
 
-    listFilesInDirectory(util.packagePath).forEach(function (f) { 
-        console.log(f);
-    });
+    // listFilesInDirectory(util.packagePath).forEach(function (f) { 
+    //     console.log(f);
+    // });
 
     console.log();
     console.log(`> Iterating all folders in '${layoutPath}'`);
@@ -169,4 +169,3 @@ function createPushCmd(taskPublishFolder, fullTaskName, taskVersion) {
     
     fs.writeFileSync(taskPushCmdPath, `nuget.exe push ${nupkgName} -source "${taskFeedUrl}" -apikey ${apiKey}`);
 }
-
