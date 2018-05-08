@@ -34,11 +34,6 @@ var os = require('os');
 var path = require('path');
 var util = require('./ci-util');
 
-// TODO: Make a helper method, create directory if doesn't exist? Also do this when we create files? If a folder doesn't exist then create it?
-
-// build only what's changed, do that later. It happens upstream anyways, not here.
-var localRun = false;
-
 const listFilesInDirectory = dir =>
         fs.readdirSync(dir).reduce((files, file) => {
             const name = path.join(dir, file);
@@ -53,47 +48,29 @@ const listFilesInDirectory = dir =>
 if (process.env.DISTRIBUTEDTASK_USE_PERTASK_NUGET || localRun) {
     console.log('> Creating nuget package per task');
 
-    if (localRun) {
-        var layoutPath = 'E:\\github\\vsts-tasks\\_build\\Tasks'; // This is the folder where the built tasks live.
-        var publishPath = 'E:\\github\\vsts-tasks\\_build\\Publish'; // This is the folder that we publish.
-    }
-    else {
-        // Settings when running on the server
-        var layoutPath = util.perTaskLayoutPath;
-        var publishPath = util.perTaskPublishPath;
-    }
+    var layoutPath = util.perTaskLayoutPath;
+    var publishPath = util.perTaskPublishPath;
 
-    if (!localRun) {
-        console.log('> printing folder structure before starting');
+    console.log('> printing folder structure before starting');
+    listFilesInDirectory(util.packagePath).forEach(function (f) { 
+        console.log(f);
+    });
 
-        listFilesInDirectory(util.packagePath).forEach(function (f) { 
-            console.log(f);
-        });
-    }
+    console.log(`> Creating folders for layout '${layoutPath}' and publish '${publishPath}'`);
+    fs.mkdirSync(layoutPath);
+    fs.mkdirSync(publishPath);
 
-    if (!localRun) {
-        console.log(`> Creating folders for layout '${layoutPath}' and publish '${publishPath}'`);
-        
-        fs.mkdirSync(layoutPath);
-        fs.mkdirSync(publishPath);
-    }
+    // TODO: I think we need to make changes here but start with this and see where it goes.
+    // console.log('> Linking aggregate layout content to per-task-layout path, may need to change this');
+    // //var commitHash = refs.head.commit;
+    console.log(`> Linking content.`);
+    var commitHash = 'aaaaaa';
+    var taskDestMap = {}; // I don't think this is actually used for anything?
+    util.linkAggregateLayoutContent(util.milestoneLayoutPath, layoutPath, '', commitHash, taskDestMap);
 
-    if (localRun) {
-        console.log('Running locally, skipping aggregate layout content linking');
-    }
-    else {
-        // TODO: I think we need to make changes here but start with this and see where it goes.
-        // console.log('> Linking aggregate layout content to per-task-layout path, may need to change this');
-        // //var commitHash = refs.head.commit;
-
-        var commitHash = 'aaaaaa';
-        var taskDestMap = {}; // I don't think this is actually used for anything?
-        util.linkAggregateLayoutContent(util.milestoneLayoutPath, layoutPath, '', commitHash, taskDestMap);
-
-        listFilesInDirectory(util.packagePath).forEach(function (f) { 
-            console.log(f);
-        });
-    }
+    listFilesInDirectory(util.packagePath).forEach(function (f) { 
+        console.log(f);
+    });
 
     console.log();
     console.log(`> Iterating all folders in '${layoutPath}'`);
@@ -105,9 +82,6 @@ if (process.env.DISTRIBUTEDTASK_USE_PERTASK_NUGET || localRun) {
             }
 
             var taskLayoutPath = path.join(layoutPath, taskFolderName); // e.g. - _package\per-task-layout\AzurePowerShellV3__v3. For some reason there is also D:\a\1\s\_package\per-task-layout\AzurePowerShellV3__v3_aaaaaa
-            // console.log();
-            // console.log('> Task path exists: ' + fs.existsSync(taskLayoutPath));
-            // console.log('> Task path: ' + taskLayoutPath);
 
             // load the task.json
             var taskJsonPath = path.join(taskLayoutPath, 'task.json');
@@ -124,12 +98,10 @@ if (process.env.DISTRIBUTEDTASK_USE_PERTASK_NUGET || localRun) {
         });
 
 
-    if (!localRun) {
-        console.log('> Finished, printing package folder contents.');
-        listFilesInDirectory(util.packagePath).forEach(function (f) { 
-            console.log(f);
-        });
-    }
+    console.log('> Finished, printing package folder contents.');
+    listFilesInDirectory(util.packagePath).forEach(function (f) { 
+        console.log(f);
+    });
 }
 
 /**
@@ -155,7 +127,6 @@ function createNuspecFile(taskLayoutPath, fullTaskName, taskVersion) {
     contents += '   </metadata>' + os.EOL;
     contents += '</package>' + os.EOL;
 
-    // Careful, what about major version in folder names? Need to parse task.json and use that.... maybe
     var taskNuspecPath = path.join(taskLayoutPath, fullTaskName + '.nuspec'); // e.g. - _package\per-task-layout\AzureCLIV1__v1\Mseng.MS.TF.Build.Tasks.AzureCLIV1__v1.nuspec. TODO: This this sample accurate?
     console.log('taskNuspecPath: ' + taskNuspecPath);
     fs.writeFileSync(taskNuspecPath, contents);
@@ -173,11 +144,11 @@ function createNuspecFile(taskLayoutPath, fullTaskName, taskVersion) {
  */
 function createNuGetPackage(publishPath, taskFolderName, taskNuspecPath, taskLayoutFolder) {
     console.log('> Creating nuget package for task ' + taskFolderName);
+    
     var taskPublishFolder = path.join(publishPath, taskFolderName);
-
-    fs.mkdirSync(taskPublishFolder); // make the folder that we will publish, publish-per-task
+    fs.mkdirSync(taskPublishFolder);
     process.chdir(taskPublishFolder);
-    util.run(`nuget pack "${taskNuspecPath}" -BasePath "${taskLayoutFolder}" -NoDefaultExcludes`, /*inheritStreams:*/true);
+    util.run(`nuget pack "${taskNuspecPath}" -BasePath "${taskLayoutFolder}" -NoDefaultExcludes`, /*inheritStreams:*/ true);
 
     return taskPublishFolder;
 }
@@ -193,17 +164,8 @@ function createPushCmd(taskPublishFolder, fullTaskName, taskVersion) {
 
     var taskPushCmdPath = path.join(taskPublishFolder, 'push.cmd');
     var nupkgName = `${fullTaskName}.${taskVersion}.nupkg`;
-
-    // Settings when running locally
-    if (localRun) {
-        var taskFeedUrl = 'http://localhost:44396/'; // plus something? package name per task? maybe we need the base task feed url then we dynamically update based on task name? or specify it in task.json?
-        var apiKey = '123456';
-    }
-    else {
-        // Settings when running on the server
-        var taskFeedUrl = process.env.AGGREGATE_TASKS_FEED_URL; // Need the task feed per task. This is based on task name from task.json too.
-        var apiKey = 'Skyrise';
-    }
+    var taskFeedUrl = process.env.AGGREGATE_TASKS_FEED_URL; // Need the task feed per task. This is based on task name from task.json too? Can we append based on name?
+    var apiKey = 'Skyrise';
     
     fs.writeFileSync(taskPushCmdPath, `nuget.exe push ${nupkgName} -source "${taskFeedUrl}" -apikey ${apiKey}`);
 }
