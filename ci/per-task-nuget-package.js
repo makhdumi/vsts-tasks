@@ -160,7 +160,7 @@ function createNuGetPackage(publishPath, taskFolderName, taskNuspecPath, taskLay
  * @param {*} taskVersion Version of the task. e.g - 1.132.0
  */
 function createPushCmd(taskPublishFolder, fullTaskName, taskVersion) {
-    console.log('> Creating push.cmd for task ' + taskName);
+    console.log('> Creating push.cmd for task ' + fullTaskName);
 
     var taskPushCmdPath = path.join(taskPublishFolder, 'push.cmd');
     var nupkgName = `${fullTaskName}.${taskVersion}.nupkg`;
